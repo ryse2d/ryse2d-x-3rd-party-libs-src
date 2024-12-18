@@ -1,7 +1,6 @@
 # GLFW
-GLFW_VERSION := 3.3
-#GLFW_URL := $(GITHUB)/glfw/glfw/releases/download/$(GLFW_VERSION)/glfw-$(GLFW_VERSION).zip
-GLFW_URL := https://codeload.github.com/glfw/glfw/tar.gz/$(GLFW_VERSION)
+GLFW_VERSION := 3.0.4
+GLFW_URL := $(SF)/glfw/$(GLFW_VERSION)/glfw-$(GLFW_VERSION).tar.gz
 
 
 $(TARBALLS)/glfw-$(GLFW_VERSION).tar.gz:
@@ -11,7 +10,6 @@ $(TARBALLS)/glfw-$(GLFW_VERSION).tar.gz:
 
 glfw: glfw-$(GLFW_VERSION).tar.gz .sum-glfw
 	$(UNPACK)
-	$(APPLY) $(SRC)/glfw/dont_include_applicationservices.patch
 	$(MOVE)
 
 .glfw: glfw

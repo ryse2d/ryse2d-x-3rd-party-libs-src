@@ -1,7 +1,7 @@
 # tiff
 
 TIFF_VERSION := 4.0.3
-TIFF_URL := http://download.osgeo.org/libtiff/old/tiff-$(TIFF_VERSION).tar.gz
+TIFF_URL := http://download.osgeo.org/libtiff/tiff-$(TIFF_VERSION).tar.gz
 
 $(TARBALLS)/tiff-$(TIFF_VERSION).tar.gz:
 	$(call download,$(TIFF_URL))
@@ -19,6 +19,7 @@ tiff: tiff-$(TIFF_VERSION).tar.gz .sum-tiff
 		--disable-jpeg \
 		--disable-zlib \
 		--disable-cxx \
+		--disable-lzma \
 		--without-x
 	cd $< && $(MAKE) -C port && $(MAKE) -C libtiff
 	cd $< && $(MAKE) install

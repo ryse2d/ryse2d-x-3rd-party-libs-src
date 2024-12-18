@@ -1,10 +1,10 @@
 # rapidjson
 
-RAPIDJSON_GITURL := https://github.com/Tencent/rapidjson 
+RAPIDJSON_GITURL := https://github.com/miloyip/rapidjson
 
 
 $(TARBALLS)/librapidjson-git.tar.xz:
-	$(call download_git,$(RAPIDJSON_GITURL),master,f54b0e47)
+	$(call download_git,$(RAPIDJSON_GITURL),master,3a4835e)
 
 .sum-rapidjson: librapidjson-git.tar.xz
 	$(warning $@ not implemented)

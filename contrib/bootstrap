@@ -16,9 +16,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
 
-# exit this script if any commmand fails
-set -e
-
 #
 # Command line handling
 #
@@ -131,53 +128,6 @@ add_make_enabled()
 	done
 }
 
-check_tvos_sdk()
-{
-   [ -z "${MY_TARGET_ARCH}" ] && echo "You must set MY_TARGET_ARCH environment variable" && exit 1
-    if [ $MY_TARGET_ARCH = "x86_64" ];then
-        TVOS_PLATFORM="Simulator"
-    else
-        TVOS_PLATFORM="OS"
-    fi
-   
-   SDK_VERSION=$(xcodebuild -showsdks | grep appletvos | sort | tail -n 1 | awk '{print substr($NF,10)}')
-   
-   if test -z "$SDKROOT"
-   then
-      SDKROOT=`xcode-select -print-path`/Platforms/AppleTV${TVOS_PLATFORM}.platform/Developer/SDKs/AppleTV${TVOS_PLATFORM}${SDK_VERSION}.sdk
-      echo "SDKROOT not specified, assuming $SDKROOT"
-   else
-      SDKROOT="$SDKROOT"
-      fi
-
-   if [ ! -d "${SDKROOT}" ]
-   then
-      echo "*** ${SDKROOT} does not exist, please install required SDK, or set SDKROOT manually. ***"
-      exit 1
-   fi
-   add_make "TVOS_SDK=${SDKROOT}"
-   add_make "TVOS_TOOLCHAIN=${SDKROOT}/../../usr/bin/"
-
-   if [ "$TVOS_PLATFORM" = "OS" ]; then
-       export AS="gas-preprocessor.pl ${CC}"
-       export ASCPP="gas-preprocessor.pl ${CC}"
-       export CCAS="gas-preprocessor.pl ${CC}"
-   else
-       export ASCPP="xcrun as"
-   fi
-    
-   if [ "$TVOS_PLATFORM" = "OS" ]; then
-       EX_CFLAGS="-isysroot ${SDKROOT} -arch ${MY_TARGET_ARCH}"
-       if [ "${MY_TARGET_ARCH}" != "arm64" ]; then
-           EX_CFLAGS="${EX_CFLAGS} -mcpu=cortex-a8"
-       fi
-   else
-       EX_CFLAGS="-isysroot ${SDKROOT} -arch ${MY_TARGET_ARCH}"
-   fi
-   add_make "EXTRA_CFLAGS := ${EX_CFLAGS} -mtvos-version-min=9.0"
-   add_make "EXTRA_LDFLAGS := -L${SDKROOT}/usr/lib -arch ${MY_TARGET_ARCH} -isysroot ${SDKROOT} -mtvos-version-min=9.0"
-}
-
 check_ios_sdk()
 {
    [ -z "${MY_TARGET_ARCH}" ] && echo "You must set MY_TARGET_ARCH environment variable" && exit 1
@@ -214,15 +164,15 @@ check_ios_sdk()
    fi
     
    if [ "$IOS_PLATFORM" = "OS" ]; then
-       EX_CFLAGS="-isysroot ${SDKROOT} -arch ${MY_TARGET_ARCH} -miphoneos-version-min=7.0"
+       EX_CFLAGS="-isysroot ${SDKROOT} -arch ${MY_TARGET_ARCH} -miphoneos-version-min=6.0"
        if [ "${MY_TARGET_ARCH}" != "arm64" ]; then
            EX_CFLAGS="${EX_CFLAGS} -mcpu=cortex-a8"
        fi
    else
-       EX_CFLAGS="-isysroot ${SDKROOT} -arch ${MY_TARGET_ARCH} -miphoneos-version-min=7.0"
+       EX_CFLAGS="-isysroot ${SDKROOT} -arch ${MY_TARGET_ARCH} -miphoneos-version-min=6.0"
    fi
    add_make "EXTRA_CFLAGS := ${EX_CFLAGS}"
-   add_make "EXTRA_LDFLAGS := -L${SDKROOT}/usr/lib -arch ${MY_TARGET_ARCH} -isysroot ${SDKROOT} -miphoneos-version-min=7.0"
+   add_make "EXTRA_LDFLAGS := -L${SDKROOT}/usr/lib -arch ${MY_TARGET_ARCH} -isysroot ${SDKROOT} -miphoneos-version-min=6.0"
 }
 
 check_macosx_sdk()
@@ -269,6 +219,8 @@ check_android_sdk()
         
 	[ -z "${ANDROID_NDK}" ] && echo "You must set ANDROID_NDK environment variable" && exit 1
 	add_make "ANDROID_NDK := ${ANDROID_NDK}"
+	[ -z "${ANDROID_GCC_VERSION}" ] && echo "You must set ANDROID_GCC_VERSION environment variable" && exit 1
+	add_make "ANDROID_GCC_VERSION := ${ANDROID_GCC_VERSION}"
 	[ -z "${ANDROID_ABI}" ] && echo "You must set ANDROID_ABI environment variable" && exit 1
 	add_make "ANDROID_ABI := ${ANDROID_ABI}"
 	[ -z "${ANDROID_API}" ] && echo "You should set ANDROID_API environment variable (using default android-9)" && ANDROID_API := android-9
@@ -290,6 +242,12 @@ check_android_sdk()
                 exit $? 
             fi
         fi
+        
+        # check whether gcc version is exists
+        if [ ! -d ${ANDROID_NDK}/toolchains/${toolchain_path_prefix}-${ANDROID_GCC_VERSION} ] ;then
+            echo "${ANDROID_NDK} Invalid GCC ${ANDROID_GCC_VERSION} version!"
+            exit 1
+        fi
 
         THUMB_FLAG=""
         if [ $ANDROID_USE_MTHUMB = "yes" ];then
@@ -297,24 +255,20 @@ check_android_sdk()
             echo "we are using mthumb for ${ANDROID_ABI}!!"
         fi
 
-	     if [ ${ANDROID_ABI} = "armeabi-v7a" ]; then
+
+	if [ ${ANDROID_ABI} = "armeabi-v7a" ]; then
             add_make_enabled "HAVE_NEON"
             add_make_enabled "HAVE_ARMV7A"
-            add_make "EXTRA_CFLAGS := -march=armv7-a -mfpu=neon -mfloat-abi=softfp  ${THUMB_FLAG} -fomit-frame-pointer -fno-strict-aliasing -DANDROID -Wformat"
-            if [ $BUILD_LIB = "webp" ]; then
-                add_make "EXTRA_LDFLAGS := -march=armv7-a -Wl,--fix-cortex-a8 -lcpufeatures"
-            else
-                add_make "EXTRA_LDFLAGS := -march=armv7-a -Wl,--fix-cortex-a8"
-            fi
-
+            add_make "EXTRA_CFLAGS := -march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16 ${THUMB_FLAG} -fomit-frame-pointer -fno-strict-aliasing -DANDROID  -Wa,--noexecstack -Wformat "
+            add_make "EXTRA_LDFLAGS := -march=armv7-a -Wl,--fix-cortex-a8"
         fi
         
-	      if [ ${ANDROID_ABI} = "armeabi" -a -z "${NO_ARMV6}" ];then
+	if [ ${ANDROID_ABI} = "armeabi" -a -z "${NO_ARMV6}" ];then
             add_make_enabled "HAVE_ARMV6"
-            add_make "EXTRA_CFLAGS := -ffunction-sections -funwind-tables -fstack-protector -no-canonical-prefixes  -march=armv5te -mtune=xscale -msoft-float ${THUMB_FLAG} -fomit-frame-pointer -fno-strict-aliasing -DANDROID -Wformat "
+            add_make "EXTRA_CFLAGS := -ffunction-sections -funwind-tables -fstack-protector -no-canonical-prefixes  -march=armv5te -mtune=xscale -msoft-float ${THUMB_FLAG} -fomit-frame-pointer -fno-strict-aliasing -DANDROID  -Wa,--noexecstack -Wformat "
         fi
 
-	      if [ ${ANDROID_ABI} = "arm64-v8a" ]; then
+	if [ ${ANDROID_ABI} = "arm64-v8a" ]; then
             add_make_enabled "HAVE_NEON"
             add_make_enabled "HAVE_ARMV8A"
             add_make "EXTRA_CFLAGS :=  -fpic -ffunction-sections  -funwind-tables  -fstack-protector  -no-canonical-prefixes"
@@ -323,7 +277,7 @@ check_android_sdk()
 
         if [ ${ANDROID_ABI} = "x86" ];then
             add_make_enabled "HAVE_x86"
-            add_make "EXTRA_CFLAGS := -ffunction-sections -funwind-tables -fstack-protector -no-canonical-prefixes  -fomit-frame-pointer -fstrict-aliasing -DANDROID -Wformat "
+            add_make "EXTRA_CFLAGS := -ffunction-sections -funwind-tables -fstack-protector -no-canonical-prefixes  -fomit-frame-pointer -fstrict-aliasing -DANDROID  -Wa,--noexecstack -Wformat "
         fi
 
         if [ ${ANDROID_STL_VERSION} = "gnu" ];then
@@ -331,12 +285,13 @@ check_android_sdk()
         else
             add_make_enabled "HAVE_STL_CLANG"
         fi
+        
 }
 
 check_tizen_sdk()
 {
-    [ -z "${TIZEN_STUDIO_HOME}" ] && echo "You must set TIZEN_STUDIO_HOME environment variable" && exit 1
-    add_make "TIZEN_STUDIO_HOME := ${TIZEN_STUDIO_HOME}"
+    [ -z "${TIZEN_SDK}" ] && echo "You must set TIZEN_SDK environment variable" && exit 1
+    add_make "TIZEN_SDK := ${TIZEN_SDK}"
 }
 
 test -z "$PREFIX" || add_make "PREFIX := $PREFIX"
@@ -348,17 +303,13 @@ OS="${HOST#*-}" # strip architecture
 echo "The host is $OS"
 case "${OS}" in
 	apple-darwin*)
-		if test -n "$BUILDFORIOS"
+		if test -z "$BUILDFORIOS"
 		then
-			check_ios_sdk
-			add_make_enabled "HAVE_IOS" "HAVE_DARWIN_OS" "HAVE_BSD"  "HAVE_ARMV7A" "HAVE_NEON"
-		elif test -n "$BUILDFORTVOS"
-		then
-			check_tvos_sdk
-			add_make_enabled "HAVE_TVOS" "HAVE_DARWIN_OS" "HAVE_BSD" "HAVE_NEON"
-		else
 			check_macosx_sdk
 			add_make_enabled "HAVE_MACOSX" "HAVE_DARWIN_OS" "HAVE_BSD"
+		else
+			check_ios_sdk
+			add_make_enabled "HAVE_IOS" "HAVE_DARWIN_OS" "HAVE_BSD"  "HAVE_ARMV7A" "HAVE_NEON"
 		fi
 		;;
 	*bsd*)

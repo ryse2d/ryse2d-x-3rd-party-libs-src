@@ -22,9 +22,7 @@ VPATH := $(TARBALLS)
 
 # Common download locations
 GNU := http://ftp.gnu.org/gnu
-SF := https://downloads.sourceforge.net/project
-GITHUB := https://github.com
-
+SF := http://heanet.dl.sourceforge.net/sourceforge
 
 #
 # Machine-dependent variables
@@ -91,25 +89,13 @@ endif
 endif
 
 ifdef HAVE_ANDROID
-CC :=  clang
-CXX := clang++
-AR := $(HOST)-ar
-AS := clang
-LD := $(HOST)-ld
-STRIP := $(HOST)-strip
-RANLIB := $(HOST)-gcc-ranlib
-EXTRA_CFLAGS += --sysroot=$(ANDROID_TOOLCHAIN_PATH)/sysroot
+CC :=  $(HOST)-gcc --sysroot=$(ANDROID_NDK)/platforms/$(ANDROID_API)/arch-$(PLATFORM_SHORT_ARCH)
+CXX := $(HOST)-g++ --sysroot=$(ANDROID_NDK)/platforms/$(ANDROID_API)/arch-$(PLATFORM_SHORT_ARCH)
 endif
 
 ifdef HAVE_TIZEN
-ifeq ($(ARCH),arm)
-CC := ${HOST}-gcc --sysroot=$(TIZEN_STUDIO_HOME)/platforms/tizen-$(TIZEN_SDK_VERSION)/mobile/rootstraps/mobile-$(TIZEN_SDK_VERSION)-device.core
-CXX := ${HOST}-g++ --sysroot=$(TIZEN_STUDIO_HOME)/platforms/tizen-$(TIZEN_SDK_VERSION)/mobile/rootstraps/mobile-$(TIZEN_SDK_VERSION)-device.core
-else
-CC := ${HOST}-gcc --sysroot=$(TIZEN_STUDIO_HOME)/platforms/tizen-$(TIZEN_SDK_VERSION)/mobile/rootstraps/mobile-$(TIZEN_SDK_VERSION)-emulator.core
-CXX := ${HOST}-g++ --sysroot=$(TIZEN_STUDIO_HOME)/platforms/tizen-$(TIZEN_SDK_VERSION)/mobile/rootstraps/mobile-$(TIZEN_SDK_VERSION)-emulator.core
-EXTRA_CFLAGS += -ldl -latomic
-endif
+CC := ${HOST}-gcc --sysroot=$(TIZEN_SDK)/platforms/mobile-2.3/rootstraps/mobile-2.3-device.core
+CXX := ${HOST}-g++ --sysroot=$(TIZEN_SDK)/platforms/mobile-2.3/rootstraps/mobile-2.3-device.core
 endif
 
 ifdef HAVE_MACOSX
@@ -159,10 +145,9 @@ endif #end of HAVE_CROSS_COMPILE
 
 CCAS=$(CC) -c
 
-ifneq "$(or $(HAVE_IOS),$(HAVE_TVOS))" ""
+ifdef HAVE_IOS
 CC=xcrun clang
 CXX=xcrun clang++
-EXTRA_CFLAGS += $(ENABLE_BITCODE)
 ifdef HAVE_NEON
 AS=perl $(abspath ../../extras/tools/bin/gas-preprocessor.pl) $(CC)
 CCAS=gas-preprocessor.pl $(CC) -c
@@ -312,7 +297,7 @@ HOSTVARS_PIC := $(HOSTTOOLS) \
 
 download_git = \
 	rm -Rf $(@:.tar.xz=) && \
-	$(GIT) clone --single-branch $(2:%=--branch %) $(1) $(@:.tar.xz=) && \
+	$(GIT) clone $(2:%=--branch %) $(1) $(@:.tar.xz=) && \
 	(cd $(@:.tar.xz=) && $(GIT) checkout $(3:%= %)) && \
 	rm -Rf $(@:%.tar.xz=%)/.git && \
 	(cd $(dir $@) && \
@@ -416,13 +401,11 @@ ifdef HAVE_WIN32
 endif
 ifdef HAVE_DARWIN_OS
 	echo "set(CMAKE_SYSTEM_NAME Darwin)" >> $@
-	echo "set(CMAKE_C_FLAGS \"$(CFLAGS)\")" >> $@
-	echo "set(CMAKE_CXX_FLAGS \"$(CFLAGS)\")" >> $@
+	echo "set(CMAKE_C_FLAGS $(CFLAGS))" >> $@
+	echo "set(CMAKE_CXX_FLAGS $(CFLAGS))" >> $@
 	echo "set(CMAKE_LD_FLAGS $(LDFLAGS))" >> $@
 	echo "set(CMAKE_AR ar CACHE FILEPATH "Archiver")" >> $@
-ifdef HAVE_TVOS
-	echo "set(CMAKE_OSX_SYSROOT $(TVOS_SDK))" >> $@
-else ifdef HAVE_IOS
+ifdef HAVE_IOS
 	echo "set(CMAKE_OSX_SYSROOT $(IOS_SDK))" >> $@
 else
 	echo "set(CMAKE_OSX_SYSROOT $(MACOSX_SDK))" >> $@
@@ -434,10 +417,18 @@ ifdef HAVE_ANDROID
 # cmake will overwrite our --sysroot with a native (host) one on Darwin
 # Set it to "" right away to short-circuit this behaviour
 	echo "set(CMAKE_SYSTEM_NAME Linux)" >> $@
-	echo "set(CMAKE_CXX_SYSROOT_FLAG $(ANDROID_TOOLCHAIN_PATH)/sysroot)" >> $@
-	echo "set(CMAKE_C_SYSROOT_FLAG $(ANDROID_TOOLCHAIN_PATH)/sysroot)" >> $@
-	echo "include_directories($(ANDROID_TOOLCHAIN_PATH)/include/c++/4.9.x \
-	 	$(ANDROID_TOOLCHAIN_PATH)/include/llvm-libc++abi/include)"  >> $@
+	echo "set(CMAKE_CXX_SYSROOT_FLAG \"\")" >> $@
+	echo "set(CMAKE_C_SYSROOT_FLAG \"\")" >> $@
+ifdef HAVE_STL_GUN
+	echo "include_directories($(ANDROID_NDK)/sources/cxx-stl/gnu-libstdc++/4.9/include  \
+	    $(ANDROID_NDK)/sources/cxx-stl/gnu-libstdc++/4.9/libs/$(MY_TARGET_ARCH)/include \
+            $(ANDROID_NDK)/sources/cxx-stl/gnu-libstdc++/4.9/include/backward)"  >> $@
+endif
+ifdef HAVE_STL_CLANG
+	echo "include_directories($(ANDROID_NDK)/sources/android/support/include \
+	 	$(ANDROID_NDK)/sources/cxx-stl/llvm-libc++/libcxx/include)"  >> $@
+endif
+
 endif  #end of HAVE_ANDROID
 
 ifdef HAVE_TIZEN

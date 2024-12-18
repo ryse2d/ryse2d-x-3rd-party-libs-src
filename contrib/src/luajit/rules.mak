@@ -1,105 +1,62 @@
 # luajit
 
-LUAJIT_VERSION := 2.1.0-beta3
+LUAJIT_VERSION := 2.0.3
 LUAJIT_URL := http://luajit.org/download/LuaJIT-$(LUAJIT_VERSION).tar.gz
 
-$(TARBALLS)/LuaJIT-$(LUAJIT_VERSION).tar.gz:
+$(TARBALLS)/luajit-$(LUAJIT_VERSION).tar.gz:
 	$(call download,$(LUAJIT_URL))
 
-.sum-luajit: LuaJIT-$(LUAJIT_VERSION).tar.gz
+.sum-luajit: luajit-$(LUAJIT_VERSION).tar.gz
 
-luajit: LuaJIT-$(LUAJIT_VERSION).tar.gz .sum-luajit
+luajit: luajit-$(LUAJIT_VERSION).tar.gz .sum-luajit
 	$(UNPACK)
+	mv LuaJIT-2.0.3 $@-2.0.3
 ifeq ($(LUAJIT_VERSION),2.0.1)
 	$(APPLY) $(SRC)/luajit/v2.0.1_hotfix1.patch
 endif
-
-ifeq ($(LUAJIT_VERSION),2.1.0-beta2)
-	$(APPLY) $(SRC)/luajit/luajit-v2.1.0-beta2.patch
-endif
-ifeq ($(LUAJIT_VERSION),2.1.0-beta3)
-	$(APPLY) $(SRC)/luajit/luajit-v2.1.0-beta3.patch
+ifeq ($(LUAJIT_VERSION),2.0.3)
+	$(APPLY) $(SRC)/luajit/ldsize-512.patch
 endif
 	$(MOVE)
 
 ifdef HAVE_IOS
+
 ifeq ($(MY_TARGET_ARCH),armv7)
-LUAJIT_HOST_CC="CC -m32 $(OPTIM)"
+LUAJIT_TARGET_FLAGS="-arch armv7 -isysroot $(IOS_SDK) $(OPTIM)"
+LUAJIT_HOST_CC="gcc -m32 -arch i386"
 endif
 
 ifeq ($(MY_TARGET_ARCH),armv7s)
-LUAJIT_HOST_CC="gcc -m32 $(OPTIM)"
+LUAJIT_TARGET_FLAGS="-arch armv7s -isysroot $(IOS_SDK) $(OPTIM)"
+LUAJIT_HOST_CC="gcc -m32 -arch i386"
 endif
-
-ifeq ($(MY_TARGET_ARCH),arm64)
-LUAJIT_HOST_CC="gcc -m64 $(OPTIM)"
-endif
-
-ifeq ($(MY_TARGET_ARCH),i386)
-LUAJIT_HOST_CC="gcc -m32 $(OPTIM)"
-endif
-
-LUAJIT_TARGET_FLAGS="-isysroot $(IOS_SDK) -Qunused-arguments $(EXTRA_CFLAGS) $(EXTRA_LDFLAGS) $(ENABLE_BITCODE)"
-LUAJIT_CROSS_HOST=$(xcrun cc)
 endif #endof HAVE_IOS
 
 ifdef HAVE_ANDROID
-
-ifeq ($(MY_TARGET_ARCH),armeabi)
-LUAJIT_HOST_CC="gcc -m32 $(OPTIM)"
+NDKF=--sysroot=$(ANDROID_NDK)/platforms/$(ANDROID_API)/arch-$(PLATFORM_SHORT_ARCH)
+ifeq ($(ANDROID_ABI),armv7)
+LUAJIT_LDFLAGS="-march=armv7-a -Wl,--fix-cortex-a8"
+endif
 endif
 
-ifeq ($(MY_TARGET_ARCH),armeabi-v7a)
-LUAJIT_HOST_CC="gcc -m32 $(OPTIM)"
-endif
-
-ifeq ($(MY_TARGET_ARCH),arm64-v8a)
-LUAJIT_HOST_CC="gcc -m64 $(OPTIM)"
-endif
-
-ifeq ($(MY_TARGET_ARCH),x86)
-LUAJIT_HOST_CC="gcc -m32 $(OPTIM)"
-endif
-
-ifeq ($(MY_TARGET_ARCH),x86_64)
-LUAJIT_HOST_CC="gcc -m64 $(OPTIM) -DLUAJIT_ENABLE_GC64"
-endif
-
-LUAJIT_TARGET_FLAGS="${EXTRA_CFLAGS} ${EXTRA_LDFLAGS}"
-LUAJIT_CROSS_HOST=$(HOST)-
-endif
 
 .luajit: luajit
 ifdef HAVE_ANDROID
-	cd $< && $(MAKE) -j8 HOST_CC=$(LUAJIT_HOST_CC) CROSS=$(LUAJIT_CROSS_HOST) CC=clang TARGET_SYS=Linux TARGET_FLAGS=$(LUAJIT_TARGET_FLAGS)
+	cd $< && $(MAKE) HOST_CC="gcc -m32 $(OPTIM)" CROSS=$(HOST)- TARGET_SYS=Linux TARGET_FLAGS="${NDKF} ${EXTRA_CFLAGS}" TARGET_LDFLAGS=$(LUAJIT_LDFLAGS)
 endif
-
 ifdef HAVE_MACOSX
-	cd $< && CFLAGS="-DLUAJIT_ENABLE_GC64" LD_FLAGS="" $(MAKE) -j8
+	cd $< && $(HOSTVARS_PIC) $(MAKE) HOST_CC="$(CC)" HOST_CFLAGS="$(CFLAGS)"
 endif
-
-ifndef HAVE_ANDROID
-
-ifdef HAVE_LINUX
-
-ifeq ($(MY_TARGET_ARCH),x86_64)
-	cd $< && $(HOSTVARS_PIC) $(MAKE) -j8 HOST_CC="$(CC)" HOST_CFLAGS="$(CFLAGS)"
-else
-	cd $< && $(HOSTVARS_PIC) $(MAKE) -j8 HOST_CC="$(CC) -m32" HOST_CFLAGS="$(CFLAGS)"
-endif
-
-endif #ifdef HAVE_LINUX
-
-endif #ifndef HAVE_ANDROID
-
 ifdef HAVE_IOS
-
-ifeq ($(MY_TARGET_ARCH),x86_64)
-	cd $< && CFLAGS="-DLUAJIT_ENABLE_GC64" LD_FLAGS="" $(MAKE) -j8
-else
-	cd $< && $(MAKE) -j8 HOST_CC=$(LUAJIT_HOST_CC) CROSS=$(LUAJIT_CROSS_HOST) TARGET_SYS=iOS  TARGET_FLAGS=$(LUAJIT_TARGET_FLAGS)
+ifeq ($(MY_TARGET_ARCH),armv7)
+	cd $< && make HOST_CC=$(LUAJIT_HOST_CC) TARGET_FLAGS=$(LUAJIT_TARGET_FLAGS) TARGET=arm TARGET_SYS=iOS
 endif
-
+ifeq ($(MY_TARGET_ARCH),armv7s)
+	cd $< && make HOST_CC=$(LUAJIT_HOST_CC) TARGET_FLAGS=$(LUAJIT_TARGET_FLAGS) TARGET=arm TARGET_SYS=iOS
 endif
-	cd $< && $(MAKE) install PREFIX=$(PREFIX)
+ifeq ($(MY_TARGET_ARCH),i386)
+	cd $< && make CC="gcc -m32 -arch i386 $(OPTIM)"
+endif
+endif
+	cd $< && make install PREFIX=$(PREFIX)
 	touch $@

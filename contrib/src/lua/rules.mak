@@ -17,9 +17,6 @@ endif
 ifdef HAVE_IOS
 LUA_TARGET := ios
 endif
-ifdef HAVE_TVOS
-LUA_TARGET := tvos
-endif
 ifdef HAVE_WIN32
 LUA_TARGET := mingw
 endif
@@ -40,9 +37,6 @@ lua: lua-$(LUA_VERSION).tar.gz .sum-lua
 	$(APPLY) $(SRC)/lua/luac-32bits.patch
 	$(APPLY) $(SRC)/lua/no-localeconv.patch
 	$(APPLY) $(SRC)/lua/lua-macosx-support.patch
-ifdef HAVE_TVOS
-	$(APPLY) $(SRC)/lua/lua-no-system.patch
-endif
 
 	(cd $(UNPACK_DIR) && \
 	sed -e 's%gcc%$(CC)%' \
@@ -72,8 +66,8 @@ ifdef HAVE_WIN32
 	mkdir -p -- "$(PREFIX)/lib/pkgconfig"
 	cp $</etc/lua.pc "$(PREFIX)/lib/pkgconfig/"
 endif
-ifdef HAVE_CROSS_COMPILE
-	cd $</src && $(MAKE) clean && $(MAKE) liblua.a && ranlib liblua.a && $(MAKE) luac
-	cp $</src/luac $(PREFIX)/bin
-endif
+# ifdef HAVE_CROSS_COMPILE
+# 	cd $</src && $(MAKE) clean && $(MAKE) liblua.a && ranlib liblua.a && $(MAKE) luac
+# 	cp $</src/luac $(PREFIX)/bin
+# endif
 	touch $@
